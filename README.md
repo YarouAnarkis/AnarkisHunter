@@ -216,6 +216,25 @@ This tool is intended for:
 
 ---
 
+## 🔮 Roadmap / Future Development
+
+Ke depannya, proyek ini dapat dikembangkan menjadi *Enterprise-grade Security Tool* dengan menambahkan fitur-fitur mutakhir berikut:
+
+1. **Migrasi Asynchronous (Performa Maksimal):** 
+   Berpindah dari `Multithreading` (sinkron) ke arsitektur *Asynchronous* (`asyncio` + `aiohttp`) untuk menembakkan ribuan *request* per detik tanpa membebani CPU, mirip kinerja *ffuf* atau *nuclei*.
+2. **Mekanisme Anti "False Positive" Cerdas:** 
+   Alih-alih sekadar mencocokkan pola teks (regex), tool akan menganalisis secara heuristik struktur DOM HTML antara respons normal vs respons *error* untuk menembus WAF secara lebih akurat.
+3. **Payload Berbasis Template (YAML):** 
+   Mengadopsi format YAML untuk memisahkan logika pendeteksian dari kode Python murni. Pengguna dapat menambah CVE baru hanya dengan membuat *file template* tanpa perlu menulis kode (seperti cara kerja Nuclei).
+4. **Integrasi Burp Suite / OWASP ZAP:** 
+   Menambahkan fitur ekspor tangkapan data ke `.xml` atau `.json` yang bisa langsung diimpor ke dalam proksi keamanan profesional.
+5. **Deteksi "Out-of-Band" (OOB / Blind Vulnerabilities) 📡:** 
+   Mendeteksi celah *Blind* (seperti Blind SQLi / Blind SSRF) dengan memaksa server target melakukan *ping* atau *DNS request* balik ke *server monitoring* eksternal untuk verifikasi celah 100% tanpa respon layar.
+6. **Auto-Login & Session Maintenance 🤖:** 
+   Mekanisme otomatis (*headless*) yang bisa menavigasi ke halaman login, melewati proteksi CSRF, mengambil token/cookie JWT, dan menjaga sesi tetap hidup selama proses *Post-Exploitation*.
+
+---
+
 ## 📚 References
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
