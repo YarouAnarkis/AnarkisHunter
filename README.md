@@ -28,7 +28,7 @@
 
 ### Linux / macOS / WSL2
 ```bash
-git clone https://github.com/yourusername/AnarkisHunter
+git clone https://github.com/YarouAnarkis/AnarkisHunter
 cd AnarkisHunter
 chmod +x install.sh && ./install.sh
 source .venv/bin/activate
@@ -36,7 +36,7 @@ source .venv/bin/activate
 
 ### Windows
 ```cmd
-git clone https://github.com/yourusername/AnarkisHunter
+git clone https://github.com/YarouAnarkis/AnarkisHunter
 cd AnarkisHunter
 install.bat
 .venv\Scripts\activate
