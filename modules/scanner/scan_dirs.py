@@ -73,7 +73,7 @@ def run_dir_scan(
     proxy: Optional[str] = None,
 ) -> Dict:
     base_url = normalize_url(target)
-    paths = wordlist or wordlist_manager.get("directories")
+    paths = wordlist or wordlist_manager.load("directories")
 
     if extensions:
         expanded = []
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument("--ext", nargs="+", help="Extensions e.g. .php .html")
     args = parser.parse_args()
 
-    wl = wordlist_manager.load_file(args.wordlist) if args.wordlist else None
+    wl = wordlist_manager.load("directories", args.wordlist) if args.wordlist else None
 
     console.print(f"\n[cyan]Directory Scan: [bold]{args.url}[/bold] ({args.threads} threads)[/cyan]\n")
     data = run_dir_scan(args.url, wl, args.threads, args.timeout, args.ext)

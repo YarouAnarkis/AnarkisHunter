@@ -204,7 +204,7 @@ if __name__ == "__main__":
 
     words = None
     if args.wordlist:
-        words = wordlist_manager.get_from_file(args.wordlist)
+        words = wordlist_manager.load("subdomains", args.wordlist)
 
     console.print(f"\n[cyan]🔎 Subdomain Enumeration: [bold]{target}[/bold][/cyan]")
     console.print(f"[dim]Threads: {args.threads} | crt.sh: {not args.no_crtsh}[/dim]\n")
