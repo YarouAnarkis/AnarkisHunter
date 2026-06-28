@@ -1,8 +1,8 @@
 """
 AnarkisHunter — scan_dirs.py
 ===============================
-Directory bruteforce scanner (status codes berdasarkan response).
-Threaded, dengan rate limiting & WAF awareness.
+Directory bruteforce scanner — async parallel dengan httpx.
+Connection pooling, --threads, --timeout support.
 
 Usage standalone:
     python modules/scanner/scan_dirs.py --url http://target.local
@@ -11,39 +11,56 @@ Usage standalone:
 
 import sys
 import argparse
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from modules.utils.utils_request import HTTPClient, normalize_url
+from modules.utils.utils_request import HTTPClient, normalize_url, async_batch_request
 from modules.utils.utils_wordlist import wordlist_manager
+from modules.utils.utils_scan_async import run_async
 from modules.utils.report import ScanResult
 
 
-# Status code groups
 INTERESTING_CODES = {200, 201, 202, 204, 301, 302, 307, 308, 401, 403}
 
 
-def _scan_one_path(client: HTTPClient, base: str, path: str) -> Optional[Dict]:
-    """Test satu path, return dict jika interesting."""
-    url = base.rstrip("/") + "/" + path.lstrip("/")
-    try:
-        resp = client.get(url)
-        if not resp:
+async def _async_dir_scan(
+    base_url: str,
+    paths: List[str],
+    threads: int,
+    timeout: int,
+    delay: float = 0,
+    proxy: Optional[str] = None,
+) -> List[Dict]:
+    urls = [base_url.rstrip("/") + "/" + p.lstrip("/") for p in paths]
+    found = []
+
+    async with HTTPClient(timeout=timeout, threads=threads, delay=delay, proxy=proxy) as client:
+        def _filter_result(url: str, resp) -> Optional[Dict]:
+            if resp and resp.status_code in INTERESTING_CODES:
+                path = url.replace(base_url.rstrip("/") + "/", "")
+                return {
+                    "path": path,
+                    "url": url,
+                    "status": resp.status_code,
+                    "size": len(resp.content),
+                    "content_type": resp.headers.get("Content-Type", "")[:50],
+                }
             return None
-        if resp.status_code in INTERESTING_CODES:
-            return {
-                "path": path,
-                "url": url,
-                "status": resp.status_code,
-                "size": len(resp.content),
-                "content_type": resp.headers.get("Content-Type", "")[:50],
-            }
-    except Exception:
-        pass
-    return None
+
+        semaphore = asyncio.Semaphore(threads)
+
+        async def _fetch(url: str):
+            async with semaphore:
+                resp = await client.aget(url)
+                return _filter_result(url, resp)
+
+        tasks = [_fetch(u) for u in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        found = [r for r in results if isinstance(r, dict)]
+
+    return found
 
 
 def run_dir_scan(
@@ -52,23 +69,12 @@ def run_dir_scan(
     threads: int = 20,
     timeout: int = 8,
     extensions: Optional[List[str]] = None,
+    delay: float = 0,
+    proxy: Optional[str] = None,
 ) -> Dict:
-    """
-    Bruteforce direktori pada target.
-
-    Args:
-        target: URL base
-        wordlist: List path/dir untuk dicoba (default: BUILTIN_DIRS)
-        threads: Worker concurrency
-        extensions: Tambahan extension (mis. ['.php', '.html'])
-
-    Returns:
-        Dict berisi found paths
-    """
     base_url = normalize_url(target)
     paths = wordlist or wordlist_manager.get("directories")
 
-    # Expand with extensions
     if extensions:
         expanded = []
         for p in paths:
@@ -83,21 +89,16 @@ def run_dir_scan(
         "total_tested": len(paths),
         "found": [],
         "by_status": {},
+        "findings": [],
         "error": None,
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
-            with ThreadPoolExecutor(max_workers=threads) as ex:
-                futures = {ex.submit(_scan_one_path, client, base_url, p): p for p in paths}
-                for fut in as_completed(futures):
-                    try:
-                        res = fut.result()
-                        if res:
-                            result["found"].append(res)
-                            result["by_status"][res["status"]] = result["by_status"].get(res["status"], 0) + 1
-                    except Exception:
-                        continue
+        found = run_async(_async_dir_scan(base_url, paths, threads, timeout, delay, proxy))
+        result["found"] = found
+        for res in found:
+            result["by_status"][res["status"]] = result["by_status"].get(res["status"], 0) + 1
+        result["findings"] = analyze_dir_findings(result)
     except Exception as e:
         result["error"] = str(e)
 
@@ -106,9 +107,7 @@ def run_dir_scan(
 
 
 def analyze_dir_findings(data: Dict) -> List[ScanResult]:
-    """Analisis hasil dir scan."""
     findings = []
-    target = data.get("target", "")
 
     for f in data.get("found", []):
         path_lower = f["path"].lower()
@@ -132,15 +131,12 @@ def analyze_dir_findings(data: Dict) -> List[ScanResult]:
             description=f"Path {f['path']} returned HTTP {f['status']} ({f['size']} bytes)",
             url=f["url"],
             evidence=f"Status: {f['status']} | Content-Type: {f['content_type']} | Size: {f['size']}",
-            recommendation="Review apakah path ini seharusnya accessible publicly",
             owasp="A05" if severity != "INFO" else "",
             module="scan_dirs",
         ))
 
     return findings
 
-
-# ─── Standalone ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     from rich.console import Console
@@ -155,11 +151,9 @@ if __name__ == "__main__":
     parser.add_argument("--ext", nargs="+", help="Extensions e.g. .php .html")
     args = parser.parse_args()
 
-    wl = None
-    if args.wordlist:
-        wl = wordlist_manager.load_file(args.wordlist)
+    wl = wordlist_manager.load_file(args.wordlist) if args.wordlist else None
 
-    console.print(f"\n[cyan]📁 Directory Scan: [bold]{args.url}[/bold] ({args.threads} threads)[/cyan]\n")
+    console.print(f"\n[cyan]Directory Scan: [bold]{args.url}[/bold] ({args.threads} threads)[/cyan]\n")
     data = run_dir_scan(args.url, wl, args.threads, args.timeout, args.ext)
 
     console.print(f"[green]Tested:[/green] {data['total_tested']} paths")
@@ -175,8 +169,3 @@ if __name__ == "__main__":
             color = "green" if f["status"] == 200 else "yellow" if f["status"] < 400 else "red"
             t.add_row(f"[{color}]{f['status']}[/{color}]", f["path"], str(f["size"]), f["content_type"])
         console.print(t)
-
-    if data["by_status"]:
-        console.print("\n[bold]By status:[/bold]")
-        for code, count in sorted(data["by_status"].items()):
-            console.print(f"  [{code}] → {count}")

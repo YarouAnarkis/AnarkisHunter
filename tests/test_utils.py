@@ -272,7 +272,7 @@ class TestReportEngine(unittest.TestCase):
         )
         self.assertEqual(finding.title, "Test Finding")
         self.assertEqual(finding.severity, "HIGH")
-        self.assertEqual(finding.cvss_score, 7.5)  # Auto-assigned for HIGH
+        self.assertEqual(finding.cvss_score, 9.8)  # OWASP A03 (Injection)
 
     def test_report_json_export(self):
         import tempfile, os

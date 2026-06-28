@@ -11,10 +11,11 @@ Usage standalone:
 import sys
 import argparse
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from modules.utils.utils_request import HTTPClient, normalize_url
+from modules.utils.utils_waf_bypass import waf_bypass
 from modules.utils.report import ScanResult
 from config.settings import WAF_SIGNATURES
 
@@ -51,7 +52,12 @@ def _detect_waf_in_response(resp) -> List[str]:
     return detected
 
 
-def run_waf_scan(target: str, timeout: int = 10) -> Dict:
+def run_waf_scan(
+    target: str,
+    timeout: int = 10,
+    threads: int = 10,
+    proxy: Optional[str] = None,
+) -> Dict:
     """Detect WAF & test bypass dengan payload."""
     url = normalize_url(target)
     result = {
@@ -60,12 +66,15 @@ def run_waf_scan(target: str, timeout: int = 10) -> Dict:
         "baseline_status": None,
         "blocked_payloads": [],
         "passing_payloads": [],
+        "bypass_results": [],
         "block_rate": 0.0,
+        "bypass_mode": False,
+        "findings": [],
         "error": None,
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
+        with HTTPClient(timeout=timeout, threads=threads, proxy=proxy) as client:
             # Baseline
             baseline = client.get(url)
             if not baseline:
@@ -73,25 +82,27 @@ def run_waf_scan(target: str, timeout: int = 10) -> Dict:
                 return result
             result["baseline_status"] = baseline.status_code
             result["detected_wafs"] = _detect_waf_in_response(baseline)
+            waf_bypass.detect_from_response(baseline)
+            for w in result["detected_wafs"]:
+                if w not in waf_bypass.detected_wafs:
+                    waf_bypass.detected_wafs.append(w)
+            result["bypass_mode"] = waf_bypass.bypass_mode
 
-            # Probe payloads
             for payload in WAF_TRIGGER_PAYLOADS:
                 test_url = url + payload
                 resp = client.get(test_url)
                 if not resp:
                     continue
 
-                # Tambah deteksi WAF dari probe response juga
                 new_wafs = _detect_waf_in_response(resp)
                 for w in new_wafs:
                     if w not in result["detected_wafs"]:
                         result["detected_wafs"].append(w)
+                    waf_bypass.detect_from_response(resp)
 
-                # Block detection
                 body_low = resp.text.lower()[:3000]
-                is_blocked = (
-                    resp.status_code in {403, 406, 419, 429, 503} or
-                    any(ind in body_low for ind in BLOCK_INDICATORS)
+                is_blocked = waf_bypass.is_blocked(resp) or any(
+                    ind in body_low for ind in BLOCK_INDICATORS
                 )
 
                 info = {
@@ -102,12 +113,26 @@ def run_waf_scan(target: str, timeout: int = 10) -> Dict:
                 }
                 if is_blocked:
                     result["blocked_payloads"].append(info)
+                    if waf_bypass.bypass_mode:
+                        raw = payload.lstrip("?").split("=", 1)[-1] if "=" in payload else payload
+                        for variant in waf_bypass.generate_bypass_variants(raw):
+                            bypass_url = url + payload.replace(raw, variant["payload"])
+                            bypass_resp = client.get(bypass_url)
+                            if bypass_resp and not waf_bypass.is_blocked(bypass_resp):
+                                result["bypass_results"].append({
+                                    "original": payload,
+                                    "technique": variant["technique"],
+                                    "payload": variant["payload"],
+                                    "status": bypass_resp.status_code,
+                                })
                 else:
                     result["passing_payloads"].append(info)
 
             total = len(WAF_TRIGGER_PAYLOADS)
             if total:
                 result["block_rate"] = len(result["blocked_payloads"]) / total * 100
+
+        result["findings"] = analyze_waf_findings(result)
 
     except Exception as e:
         result["error"] = str(e)
@@ -120,12 +145,16 @@ def analyze_waf_findings(data: Dict) -> List[ScanResult]:
     url = data.get("url", "")
 
     if data.get("detected_wafs"):
+        bypass_note = ""
+        if data.get("bypass_results"):
+            techniques = list({b["technique"] for b in data["bypass_results"]})
+            bypass_note = f" | Bypass successful via: {', '.join(techniques)}"
         findings.append(ScanResult(
             title=f"WAF Detected: {', '.join(data['detected_wafs'])}",
             severity="INFO",
-            description=f"WAF terdeteksi: {', '.join(data['detected_wafs'])}",
+            description=f"WAF terdeteksi: {', '.join(data['detected_wafs'])}{bypass_note}",
             url=url,
-            evidence=f"WAFs: {data['detected_wafs']} | Block rate: {data['block_rate']:.0f}%",
+            evidence=f"WAFs: {data['detected_wafs']} | Block rate: {data['block_rate']:.0f}%{bypass_note}",
             recommendation="Gunakan payload obfuscation / encoding untuk bypass WAF (jika authorized)",
             module="scan_waf",
         ))

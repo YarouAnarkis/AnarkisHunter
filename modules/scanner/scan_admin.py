@@ -10,7 +10,7 @@ Usage standalone:
 import sys
 import argparse
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -72,7 +72,14 @@ def _extract_title(html: str) -> str:
     return m.group(1).strip()[:100] if m else ""
 
 
-def run_admin_scan(target: str, paths: List[str] = None, threads: int = 20, timeout: int = 8) -> Dict:
+def run_admin_scan(
+    target: str,
+    paths: List[str] = None,
+    threads: int = 20,
+    timeout: int = 8,
+    delay: float = 0,
+    proxy: Optional[str] = None,
+) -> Dict:
     """Scan admin panel paths."""
     base_url = normalize_url(target)
     paths = paths or ADMIN_PATHS
@@ -86,7 +93,7 @@ def run_admin_scan(target: str, paths: List[str] = None, threads: int = 20, time
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
+        with HTTPClient(timeout=timeout, threads=threads, delay=delay, proxy=proxy) as client:
             with ThreadPoolExecutor(max_workers=threads) as ex:
                 futures = {ex.submit(_probe_admin, client, base_url, p): p for p in paths}
                 for fut in as_completed(futures):

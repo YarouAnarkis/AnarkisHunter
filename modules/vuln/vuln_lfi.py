@@ -19,6 +19,8 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from modules.utils.utils_request import HTTPClient, normalize_url
 from modules.utils.utils_payload import payload_manager
+from modules.utils.utils_verifier import FindingVerifier, confidence_to_severity
+from modules.utils.utils_waf_bypass import waf_bypass
 from modules.utils.report import ScanResult
 
 
@@ -63,6 +65,8 @@ def run_lfi_scan(
     params: Optional[List[str]] = None,
     payloads: Optional[List[str]] = None,
     timeout: int = 10,
+    threads: int = 10,
+    proxy: Optional[str] = None,
 ) -> Dict:
     url = normalize_url(target)
     parsed = urlparse(url)
@@ -79,26 +83,46 @@ def run_lfi_scan(
         "params_tested": params,
         "total_payloads": len(payloads),
         "vulnerabilities": [],
+        "findings": [],
         "error": None,
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
+        with HTTPClient(timeout=timeout, threads=threads, proxy=proxy) as client:
+            verifier = FindingVerifier(client, url)
+            verifier.capture_baseline()
+            seen = set()
+
             for param in params:
                 for payload in payloads:
-                    test_url = inject_param(url, param, payload)
-                    resp = client.get(test_url)
-                    if not resp:
-                        continue
+                    variants = waf_bypass.generate_bypass_variants(payload, url, param)
+                    for variant in variants:
+                        actual = variant["payload"]
+                        test_url = variant.get("url") or inject_param(url, param, actual)
+                        key = f"{param}:{actual}"
+                        if key in seen:
+                            continue
 
-                    ev = detect_lfi_evidence(resp.text, payload)
-                    if ev:
+                        def check_fn(base, test, p=actual):
+                            if not test or verifier.is_same_as_baseline(test):
+                                return None
+                            ev = detect_lfi_evidence(test.text, p)
+                            if ev:
+                                return {"type": "Path Traversal / LFI", "evidence": ev}
+                            return None
+
+                        finding = verifier.verify_finding(test_url, check_fn, min_confidence=55)
+                        if not finding:
+                            continue
+                        seen.add(key)
                         result["vulnerabilities"].append({
-                            "param": param, "payload": payload,
-                            "evidence": ev, "url": test_url,
-                            "status": resp.status_code,
-                            "type": "Path Traversal / LFI",
+                            "param": param, "payload": actual,
+                            "evidence": finding.get("evidence", ""), "url": test_url,
+                            "type": finding.get("type", "LFI"),
+                            "confidence": finding.get("confidence", 0),
                         })
+
+        result["findings"] = analyze_lfi_findings(result)
 
     except Exception as e:
         result["error"] = str(e)
@@ -111,17 +135,14 @@ def analyze_lfi_findings(data: Dict) -> List[ScanResult]:
     for v in data.get("vulnerabilities", []):
         findings.append(ScanResult(
             title=f"Local File Inclusion on '{v['param']}'",
-            severity="CRITICAL",
-            description=f"LFI/Path Traversal terdeteksi pada parameter '{v['param']}'",
+            severity=confidence_to_severity(v.get("confidence", 0), "CRITICAL"),
+            description=f"LFI/Path Traversal on '{v['param']}' [confidence: {v.get('confidence', 0)}%]",
             url=v["url"],
             evidence=v["evidence"][:500],
             payload=v["payload"],
-            recommendation=(
-                "Whitelist nama file; sanitize ../; gunakan basename(); "
-                "simpan file di luar webroot; never include user input directly"
-            ),
-            owasp="A01",
+            owasp="A03",
             module="vuln_lfi",
+            confidence=v.get("confidence", 0),
         ))
     return findings
 

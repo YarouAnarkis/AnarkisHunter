@@ -22,7 +22,7 @@ for _dir in [REPORTS_DIR, LOGS_DIR, DATABASE_DIR]:
 
 # ─── Tool Info ───────────────────────────────────────────────────────────────
 TOOL_NAME = "AnarkisHunter"
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "2.0.0"
 TOOL_AUTHOR = "AnarkisHunter Team"
 TOOL_DESCRIPTION = "Professional Web Penetration Testing Toolkit"
 TOOL_GITHUB = "https://github.com/yourusername/AnarkisHunter"
@@ -239,7 +239,27 @@ OWASP_TOP10 = {
     "A10": "Server-Side Request Forgery (SSRF)",
 }
 
-# ─── Legal Disclaimer ─────────────────────────────────────────────────────────
+# ─── Remediation Templates ───────────────────────────────────────────────────
+REMEDIATION = {
+    "sqli": "Use parameterized queries/prepared statements. Validate and sanitize all input. Deploy WAF as defense-in-depth.",
+    "xss": "Encode output contextually (HTML/JS/URL). Implement Content-Security-Policy. Validate input server-side.",
+    "lfi": "Avoid user-controlled file paths. Use allowlists for file inclusion. Disable dangerous PHP wrappers.",
+    "cmdi": "Never pass user input to system commands. Use safe APIs instead of shell execution. Input validation.",
+    "ssti": "Use sandboxed template engines. Never render user input as template code. Keep frameworks updated.",
+    "xxe": "Disable external entity processing in XML parsers. Use JSON instead of XML where possible.",
+    "ssrf": "Validate and allowlist URLs. Block internal IP ranges. Disable unnecessary URL fetching.",
+    "csrf": "Implement anti-CSRF tokens on all state-changing requests. Use SameSite cookie attribute.",
+    "idor": "Implement proper authorization checks on every object access. Use unpredictable identifiers.",
+    "auth": "Enforce strong password policy. Implement account lockout. Use MFA where possible.",
+    "session": "Set Secure, HttpOnly, SameSite flags on cookies. Regenerate session ID after login.",
+    "cors": "Restrict Access-Control-Allow-Origin to trusted domains. Never use wildcard with credentials.",
+    "headers": "Implement all security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options.",
+    "upload": "Validate file type by content not extension. Store uploads outside webroot. Scan with AV.",
+    "redirect": "Validate redirect URLs against allowlist. Never redirect to user-controlled URLs.",
+    "exposure": "Remove sensitive data from responses. Disable debug/verbose error modes in production.",
+    "default": "Review and remediate according to OWASP guidelines. Apply principle of least privilege.",
+}
+
 LEGAL_DISCLAIMER = """
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    ⚠️  LEGAL DISCLAIMER ⚠️                        ║

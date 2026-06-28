@@ -19,6 +19,8 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from modules.utils.utils_request import HTTPClient, normalize_url
 from modules.utils.utils_payload import payload_manager
+from modules.utils.utils_verifier import FindingVerifier, confidence_to_severity
+from modules.utils.utils_waf_bypass import waf_bypass
 from modules.utils.report import ScanResult
 
 
@@ -56,7 +58,9 @@ def run_cmdi_scan(
     params: Optional[List[str]] = None,
     payloads: Optional[List[str]] = None,
     timeout: int = 15,
+    threads: int = 10,
     test_time_based: bool = True,
+    proxy: Optional[str] = None,
 ) -> Dict:
     url = normalize_url(target)
     parsed = urlparse(url)
@@ -73,47 +77,48 @@ def run_cmdi_scan(
         "params_tested": params,
         "total_payloads": len(payloads),
         "vulnerabilities": [],
+        "findings": [],
         "error": None,
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
+        with HTTPClient(timeout=timeout, threads=threads, proxy=proxy) as client:
+            verifier = FindingVerifier(client, url)
+            verifier.capture_baseline()
+            seen = set()
+
             for param in params:
                 base_val = url_params.get(param, "1")
                 for payload in payloads:
-                    # Build payload: gabungkan dengan nilai original
-                    test_payload = f"{base_val}{payload}"
-                    test_url = inject_param(url, param, test_payload)
-
                     is_time = "sleep" in payload.lower() or "ping" in payload.lower()
                     if is_time and not test_time_based:
                         continue
 
-                    t0 = time.time()
-                    resp = client.get(test_url)
-                    elapsed = time.time() - t0
-                    if not resp:
+                    test_payload = f"{base_val}{payload}"
+                    test_url = inject_param(url, param, test_payload)
+                    key = f"{param}:{test_payload}"
+                    if key in seen:
                         continue
 
-                    # Output-based
-                    out = detect_cmd_output(resp.text)
-                    if out:
-                        result["vulnerabilities"].append({
-                            "param": param, "payload": payload,
-                            "type": "Output-based Command Injection",
-                            "evidence": out, "url": test_url,
-                            "status": resp.status_code,
-                        })
-                        continue
+                    def check_fn(base, test, p=payload, tp=test_payload, itb=is_time):
+                        if not test or verifier.is_same_as_baseline(test):
+                            return None
+                        out = detect_cmd_output(test.text)
+                        if out:
+                            return {"type": "Output-based Command Injection", "evidence": out}
+                        return None
 
-                    # Time-based
-                    if is_time and elapsed > 4.5:
+                    finding = verifier.verify_finding(test_url, check_fn, min_confidence=55)
+                    if finding:
+                        seen.add(key)
                         result["vulnerabilities"].append({
                             "param": param, "payload": payload,
-                            "type": "Time-based Command Injection",
-                            "evidence": f"Response delayed {elapsed:.1f}s",
-                            "url": test_url, "status": resp.status_code,
+                            "type": finding.get("type", "Command Injection"),
+                            "evidence": finding.get("evidence", ""), "url": test_url,
+                            "confidence": finding.get("confidence", 0),
                         })
+
+        result["findings"] = analyze_cmdi_findings(result)
 
     except Exception as e:
         result["error"] = str(e)
@@ -126,18 +131,14 @@ def analyze_cmdi_findings(data: Dict) -> List[ScanResult]:
     for v in data.get("vulnerabilities", []):
         findings.append(ScanResult(
             title=f"Command Injection ({v['type']}) on '{v['param']}'",
-            severity="CRITICAL",
-            description=f"Command injection terdeteksi pada parameter '{v['param']}'",
+            severity=confidence_to_severity(v.get("confidence", 0), "CRITICAL"),
+            description=f"Command injection on '{v['param']}' [confidence: {v.get('confidence', 0)}%]",
             url=v["url"],
             evidence=v["evidence"][:500],
             payload=v["payload"],
-            recommendation=(
-                "Jangan pernah passing user input ke shell command langsung; "
-                "gunakan API library (subprocess dengan list args, bukan shell=True); "
-                "whitelist & validate input"
-            ),
             owasp="A03",
             module="vuln_cmdi",
+            confidence=v.get("confidence", 0),
         ))
     return findings
 

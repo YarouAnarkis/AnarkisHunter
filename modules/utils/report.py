@@ -18,6 +18,16 @@ from config.settings import REPORTS_DIR, TOOL_NAME, TOOL_VERSION, OWASP_TOP10
 class ScanResult:
     """Representasi satu temuan kerentanan."""
 
+    CVSS_MAP = {
+        "CRITICAL": 9.8, "HIGH": 7.5, "MEDIUM": 5.5, "LOW": 3.1, "INFO": 0.0,
+    }
+
+    OWASP_CVSS = {
+        "A01": 8.1, "A02": 7.5, "A03": 9.8, "A04": 6.5,
+        "A05": 7.0, "A06": 7.5, "A07": 8.0, "A08": 7.0,
+        "A09": 4.0, "A10": 8.6,
+    }
+
     def __init__(
         self,
         title: str,
@@ -32,6 +42,7 @@ class ScanResult:
         module: str = "",
         request: str = "",
         response: str = "",
+        confidence: int = 0,
     ):
         self.title = title
         self.severity = severity.upper()
@@ -39,8 +50,9 @@ class ScanResult:
         self.url = url
         self.evidence = evidence
         self.payload = payload
-        self.recommendation = recommendation
-        self.owasp = owasp
+        self.recommendation = recommendation or self._auto_remediation(module)
+        self.owasp = owasp or self._auto_owasp(module)
+        self.confidence = confidence
         self.cvss_score = cvss_score or self._auto_cvss()
         self.module = module
         self.request = request
@@ -48,7 +60,39 @@ class ScanResult:
         self.timestamp = datetime.datetime.now().isoformat()
 
     def _auto_cvss(self) -> float:
-        return {"CRITICAL": 9.5, "HIGH": 7.5, "MEDIUM": 5.0, "LOW": 3.0, "INFO": 0.0}.get(self.severity, 0.0)
+        if self.owasp and self.owasp in self.OWASP_CVSS:
+            base = self.OWASP_CVSS[self.owasp]
+        else:
+            base = self.CVSS_MAP.get(self.severity, 0.0)
+        if self.confidence and self.confidence < 70:
+            return round(base * (self.confidence / 100), 1)
+        return base
+
+    def _auto_owasp(self, module: str) -> str:
+        mod = module.lower()
+        if any(k in mod for k in ("sqli", "xss", "lfi", "cmdi", "ssti", "xxe", "rfi")):
+            return "A03"
+        if any(k in mod for k in ("idor", "auth", "session", "privesc")):
+            return "A01"
+        if any(k in mod for k in ("ssrf",)):
+            return "A10"
+        if any(k in mod for k in ("cors", "header", "cookie", "waf", "exposure", "error")):
+            return "A05"
+        if any(k in mod for k in ("csrf", "redirect", "clickjack")):
+            return "A04"
+        if any(k in mod for k in ("upload",)):
+            return "A04"
+        if any(k in mod for k in ("jwt",)):
+            return "A07"
+        return "A05"
+
+    def _auto_remediation(self, module: str) -> str:
+        from config.settings import REMEDIATION
+        mod = module.lower()
+        for key, text in REMEDIATION.items():
+            if key in mod:
+                return text
+        return REMEDIATION.get("default", "")
 
     def to_dict(self) -> Dict:
         return {
@@ -62,6 +106,7 @@ class ScanResult:
             "owasp": self.owasp,
             "owasp_name": OWASP_TOP10.get(self.owasp, ""),
             "cvss_score": self.cvss_score,
+            "confidence": self.confidence,
             "module": self.module,
             "request": self.request,
             "response": self.response[:500] if self.response else "",
@@ -119,7 +164,7 @@ class ReportEngine:
         from urllib.parse import urlparse
         domain = urlparse(self.target_url).netloc.replace(":", "_") or "target"
         ts = self.scan_start.strftime("%Y%m%d_%H%M%S")
-        return REPORTS_DIR / f"report_{domain}_{ts}.{fmt}"
+        return REPORTS_DIR / f"anarkishunter_{domain}_{ts}.{fmt}"
 
     # ─── Export to JSON ──────────────────────────────────────────────────────
 

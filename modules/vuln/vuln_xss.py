@@ -19,6 +19,8 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from modules.utils.utils_request import HTTPClient, normalize_url
 from modules.utils.utils_payload import payload_manager
+from modules.utils.utils_verifier import FindingVerifier, confidence_to_severity
+from modules.utils.utils_waf_bypass import waf_bypass
 from modules.utils.report import ScanResult
 
 
@@ -91,6 +93,8 @@ def run_xss_scan(
     params: Optional[List[str]] = None,
     payloads: Optional[List[str]] = None,
     timeout: int = 10,
+    threads: int = 10,
+    proxy: Optional[str] = None,
 ) -> Dict:
     url = normalize_url(target)
     parsed = urlparse(url)
@@ -107,41 +111,60 @@ def run_xss_scan(
         "params_tested": params,
         "total_payloads": len(payloads),
         "vulnerabilities": [],
+        "findings": [],
+        "waf_detected": [],
         "error": None,
     }
 
     try:
-        with HTTPClient(timeout=timeout) as client:
+        with HTTPClient(timeout=timeout, threads=threads, proxy=proxy) as client:
+            verifier = FindingVerifier(client, url)
+            verifier.capture_baseline()
+            base_resp = client.get(url)
+            if base_resp:
+                waf_bypass.detect_from_response(base_resp)
+                result["waf_detected"] = waf_bypass.detected_wafs
+
+            seen = set()
             for param in params:
                 for payload in payloads:
-                    test_url = inject_param(url, param, payload)
-                    resp = client.get(test_url)
-                    if not resp:
-                        continue
+                    variants = waf_bypass.generate_bypass_variants(payload, url, param)
+                    for variant in variants:
+                        actual = variant["payload"]
+                        test_url = variant.get("url") or inject_param(url, param, actual)
+                        key = f"{param}:{actual}"
+                        if key in seen:
+                            continue
 
-                    refl = check_reflection(resp.text, payload)
-                    if refl["exact_match"]:
+                        def check_fn(base, test, p=actual):
+                            if not test or verifier.is_same_as_baseline(test):
+                                return None
+                            refl = check_reflection(test.text, p)
+                            if refl["exact_match"]:
+                                return {
+                                    "type": "Reflected XSS",
+                                    "context": refl.get("context"),
+                                    "evidence": refl.get("context_snippet", "")[:300],
+                                    "technique": variant.get("technique", "original"),
+                                }
+                            return None
+
+                        finding = verifier.verify_finding(test_url, check_fn, min_confidence=60)
+                        if not finding:
+                            continue
+                        seen.add(key)
                         result["vulnerabilities"].append({
                             "param": param,
-                            "payload": payload,
-                            "type": "Reflected XSS",
-                            "context": refl.get("context"),
-                            "evidence": refl.get("context_snippet", "")[:300],
+                            "payload": actual,
+                            "type": finding.get("type", "Reflected XSS"),
+                            "context": finding.get("context"),
+                            "evidence": finding.get("evidence", ""),
                             "url": test_url,
-                            "status": resp.status_code,
-                            "encoded": refl["encoded"],
+                            "confidence": finding.get("confidence", 0),
+                            "technique": finding.get("technique", "original"),
                         })
-                    elif refl["encoded"]:
-                        result["vulnerabilities"].append({
-                            "param": param,
-                            "payload": payload,
-                            "type": "Reflected (HTML-encoded)",
-                            "context": "encoded — safe rendering",
-                            "evidence": "Payload reflected tapi sudah HTML-encoded",
-                            "url": test_url,
-                            "status": resp.status_code,
-                            "encoded": True,
-                        })
+
+        result["findings"] = analyze_xss_findings(result)
 
     except Exception as e:
         result["error"] = str(e)
@@ -152,30 +175,23 @@ def run_xss_scan(
 def analyze_xss_findings(data: Dict) -> List[ScanResult]:
     findings = []
     for v in data.get("vulnerabilities", []):
-        if v.get("encoded"):
-            sev = "INFO"
-            title = f"Parameter Reflected (HTML-encoded): '{v['param']}'"
-        else:
-            sev = "HIGH" if v.get("context") in ("html-body", "inside-script", "attribute") else "MEDIUM"
-            title = f"Reflected XSS on '{v['param']}' ({v.get('context', 'unknown')})"
+        confidence = v.get("confidence", 0)
+        sev = confidence_to_severity(confidence, "HIGH")
+        title = f"Reflected XSS on '{v['param']}' ({v.get('context', 'unknown')})"
 
         findings.append(ScanResult(
             title=title,
             severity=sev,
             description=(
-                f"Parameter '{v['param']}' direflect ke response tanpa encoding. "
-                f"Context: {v.get('context', 'unknown')}"
+                f"Parameter '{v['param']}' direflect ke response. "
+                f"Context: {v.get('context', 'unknown')} [confidence: {confidence}%]"
             ),
             url=v["url"],
             evidence=v["evidence"][:500],
             payload=v["payload"],
-            recommendation=(
-                "Encode output sesuai context (HTML, attribute, JS, CSS, URL); "
-                "implement Content Security Policy (CSP); validasi input; "
-                "gunakan template engine yang auto-escape"
-            ),
             owasp="A03",
             module="vuln_xss",
+            confidence=confidence,
         ))
     return findings
 

