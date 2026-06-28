@@ -111,13 +111,25 @@ class ScanUI:
         self.set_module(module_name)
         console.print(f"  [{phase_color}]▶[/{phase_color}] Running: [bold]{module_name}[/bold]...", end=" ")
 
-    def print_module_done(self, findings: int = 0, error: str = ""):
+    def print_module_done(self, findings: int | list = 0, error: str = ""):
+        if isinstance(findings, list):
+            count = len(findings)
+            titles = []
+            for f in findings:
+                title = f.title if hasattr(f, "title") else f.get("title", "")
+                if title and title not in titles:
+                    titles.append(title)
+            title_str = f" [dim magenta]({', '.join(titles[:3])})[/dim magenta]" if titles else ""
+        else:
+            count = findings or 0
+            title_str = ""
+            
         if error:
             console.print(f"[red]✗ {error[:60]}[/red]")
-        elif findings > 0:
-            console.print(f"[red]✓ {findings} finding(s)[/red]")
+        elif count > 0:
+            console.print(f"[red]✓ {count} finding(s){title_str}[/red]")
         else:
-            console.print(f"[green]✓[/green] {findings} finding(s)")
+            console.print(f"[green]✓[/green] {count} finding(s)")
 
     def print_summary_box(self, findings: list):
         """Summary table di akhir scan."""
@@ -143,12 +155,20 @@ class ScanUI:
         table.add_column("OWASP", width=6)
 
         for i, f in enumerate(findings, 1):
-            sev = f.severity if hasattr(f, "severity") else f.get("severity", "INFO")
-            title = f.title if hasattr(f, "title") else f.get("title", "")
-            url = f.url if hasattr(f, "url") else f.get("url", "")
-            cvss = f.cvss_score if hasattr(f, "cvss_score") else f.get("cvss_score", 0)
-            conf = getattr(f, "confidence", None) or f.get("confidence", "-")
-            owasp = f.owasp if hasattr(f, "owasp") else f.get("owasp", "")
+            if hasattr(f, "get"):
+                sev = f.get("severity", "INFO")
+                title = f.get("title", "")
+                url = f.get("url", "")
+                cvss = f.get("cvss_score", 0)
+                conf = f.get("confidence", "-")
+                owasp = f.get("owasp", "")
+            else:
+                sev = getattr(f, "severity", "INFO")
+                title = getattr(f, "title", "")
+                url = getattr(f, "url", "")
+                cvss = getattr(f, "cvss_score", 0)
+                conf = getattr(f, "confidence", "-")
+                owasp = getattr(f, "owasp", "")
 
             sev_text = format_severity(sev)
             table.add_row(

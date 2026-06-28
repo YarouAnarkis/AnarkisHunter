@@ -1,0 +1,15 @@
+2026-06-28 14:24:44 | INFO     | anarkishunter | Log started → D:\tolls\AnarkisHunter\logs\anarkishunter_http_scanme.nmap.org_20260628_142444.log
+2026-06-28 14:24:44 | INFO     | anarkishunter | Scan started: http://scanme.nmap.org | threads=10 timeout=10
+2026-06-28 14:24:45 | INFO     | anarkishunter | recon_headers: 8 finding(s)
+2026-06-28 14:24:45 | INFO     | anarkishunter | recon_tech: 2 finding(s)
+2026-06-28 14:24:47 | INFO     | anarkishunter | recon_robots: 1 finding(s)
+2026-06-28 14:24:47 | INFO     | anarkishunter | recon_js: 0 finding(s)
+2026-06-28 14:24:47 | INFO     | anarkishunter | recon_whois: 0 finding(s)
+2026-06-28 14:24:48 | INFO     | anarkishunter | recon_wayback: 2 finding(s)
+2026-06-28 14:24:48 | INFO     | anarkishunter | recon_ssl: 0 finding(s)
+2026-06-28 14:24:48 | INFO     | anarkishunter | recon_comments: 1 finding(s)
+2026-06-28 14:24:49 | INFO     | anarkishunter | recon_ip: 0 finding(s)
+2026-06-28 14:24:57 | INFO     | anarkishunter | recon_email: 0 finding(s)
+2026-06-28 14:25:06 | INFO     | anarkishunter | recon_dns: 3 finding(s)
+2026-06-28 14:25:10 | INFO     | anarkishunter | recon_links: 2 finding(s)
+2026-06-28 14:25:10 | INFO     | anarkishunter | Scan completed: 19 findings
