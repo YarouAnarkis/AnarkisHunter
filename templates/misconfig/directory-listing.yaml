@@ -1,0 +1,20 @@
+﻿id: directory-listing-enabled
+name: Directory Listing Enabled
+severity: MEDIUM
+owasp: A05
+tags: [misconfig, listing, exposure]
+description: Server web mengizinkan directory listing, mengekspos struktur file dan folder.
+
+request:
+  method: GET
+  path: /uploads/
+
+matchers:
+  - type: word
+    words:
+      - "Index of /"
+      - "Parent Directory"
+      - "[DIR]"
+    condition: or
+  - type: status
+    status: [200]

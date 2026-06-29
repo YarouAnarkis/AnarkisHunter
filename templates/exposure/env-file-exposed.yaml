@@ -1,0 +1,29 @@
+﻿id: env-file-exposed
+name: .env File Publicly Accessible
+severity: CRITICAL
+owasp: A05
+tags: [env, exposure, sensitive, credentials]
+description: File .env yang berisi kredensial database dan API key dapat diakses publik.
+
+request:
+  method: GET
+  path: /.env
+
+matchers:
+  - type: word
+    words:
+      - "APP_KEY"
+      - "DB_PASSWORD"
+      - "DB_HOST"
+      - "SECRET_KEY"
+      - "API_KEY"
+    condition: or
+  - type: status
+    status: [200]
+
+extractors:
+  - type: regex
+    regex:
+      - "DB_PASSWORD=(.*)"
+      - "APP_KEY=(.*)"
+      - "SECRET_KEY=(.*)"

@@ -1,0 +1,25 @@
+﻿id: phpinfo-exposed
+name: PHPInfo Page Publicly Accessible
+severity: MEDIUM
+owasp: A05
+tags: [php, exposure, info]
+description: Halaman phpinfo() mengekspos konfigurasi server, path, dan versi PHP secara publik.
+
+request:
+  method: GET
+  path: /phpinfo.php
+
+matchers:
+  - type: word
+    words:
+      - "PHP Version"
+      - "phpinfo()"
+    condition: or
+  - type: status
+    status: [200]
+
+extractors:
+  - type: regex
+    regex:
+      - "PHP Version ([\d\.]+)"
+      - "Server API => (.*)"

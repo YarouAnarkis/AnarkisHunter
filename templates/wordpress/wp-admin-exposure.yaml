@@ -1,0 +1,21 @@
+id: wp-admin-panel-exposure
+name: WordPress Admin Panel Exposed
+severity: HIGH
+owasp: A05
+tags: [wordpress, admin, exposure, panel]
+description: WordPress admin panel (/wp-admin) dapat diakses publik tanpa pembatasan akses.
+
+request:
+  method: GET
+  path: /wp-admin/
+  headers:
+    Accept: text/html
+
+matchers:
+  - type: word
+    words:
+      - "wp-login.php"
+      - "WordPress"
+    condition: or
+  - type: status
+    status: [200, 302, 301]

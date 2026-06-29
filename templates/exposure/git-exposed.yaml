@@ -1,0 +1,23 @@
+﻿id: git-repo-exposed
+name: Git Repository Publicly Exposed
+severity: CRITICAL
+owasp: A05
+tags: [git, exposure, sensitive]
+description: Folder .git dapat diakses publik, memungkinkan rekonstruksi seluruh source code aplikasi.
+
+request:
+  method: GET
+  path: /.git/HEAD
+
+matchers:
+  - type: word
+    words:
+      - "ref: refs/"
+      - "SHA"
+  - type: status
+    status: [200]
+
+extractors:
+  - type: regex
+    regex:
+      - "ref: refs/heads/(.*)"

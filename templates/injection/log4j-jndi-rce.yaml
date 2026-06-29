@@ -1,0 +1,18 @@
+﻿id: log4j-jndi-rce
+name: Log4Shell (CVE-2021-44228) - Log4j JNDI RCE
+severity: CRITICAL
+owasp: A06
+tags: [log4j, rce, jndi, cve-2021-44228]
+description: Server rentan terhadap Log4Shell RCE via JNDI lookup di input yang di-log.
+
+request:
+  method: GET
+  path: /
+  headers:
+    User-Agent: ""
+    X-Forwarded-For: ""
+    X-Api-Version: ""
+
+matchers:
+  - type: status
+    status: [200, 301, 302, 400, 401, 403, 404, 500]

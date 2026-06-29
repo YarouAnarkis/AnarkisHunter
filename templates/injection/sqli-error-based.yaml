@@ -1,0 +1,25 @@
+﻿id: sqli-error-based
+name: SQL Injection Error-Based Detection
+severity: CRITICAL
+owasp: A03
+tags: [sqli, injection, database]
+description: Parameter URL rentan terhadap SQL Injection berdasarkan deteksi pesan error database.
+
+request:
+  method: GET
+  path: /?id=1'
+  headers:
+    Accept: text/html
+
+matchers:
+  - type: regex
+    regex:
+      - "You have an error in your SQL syntax"
+      - "Warning: mysql_"
+      - "ORA-[0-9]{4,5}:"
+      - "Microsoft OLE DB Provider for SQL Server"
+      - "Unclosed quotation mark after the character string"
+      - "quoted string not properly terminated"
+    condition: or
+  - type: status
+    status: [200, 500]

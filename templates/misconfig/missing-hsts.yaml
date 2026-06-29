@@ -1,0 +1,17 @@
+﻿id: missing-hsts-header
+name: Missing HTTP Strict Transport Security Header
+severity: MEDIUM
+owasp: A05
+tags: [misconfig, headers, hsts]
+description: Header HSTS tidak dikonfigurasi, memungkinkan serangan downgrade HTTPS ke HTTP.
+
+request:
+  method: GET
+  path: /
+
+matchers:
+  - type: word
+    words:
+      - "Strict-Transport-Security"
+    condition: or
+

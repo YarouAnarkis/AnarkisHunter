@@ -1,0 +1,17 @@
+﻿id: xss-reflected-basic
+name: Reflected XSS in URL Parameters
+severity: HIGH
+owasp: A03
+tags: [xss, reflected, injection]
+description: Parameter URL memantulkan input tanpa encoding, memungkinkan serangan XSS.
+
+request:
+  method: GET
+  path: /?search=<script>alert('AnarkisXSS')</script>
+
+matchers:
+  - type: word
+    words:
+      - "<script>alert('AnarkisXSS')</script>"
+  - type: status
+    status: [200]

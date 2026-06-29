@@ -1,0 +1,20 @@
+﻿id: swagger-ui-exposed
+name: Swagger/OpenAPI Documentation Exposed
+severity: MEDIUM
+owasp: A05
+tags: [api, swagger, exposure, documentation]
+description: Dokumentasi API Swagger UI dapat diakses publik, mengekspos semua endpoint.
+
+request:
+  method: GET
+  path: /swagger-ui.html
+
+matchers:
+  - type: word
+    words:
+      - "swagger-ui"
+      - "Swagger UI"
+      - "openapi"
+    condition: or
+  - type: status
+    status: [200]

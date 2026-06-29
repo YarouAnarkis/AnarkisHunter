@@ -1,0 +1,19 @@
+﻿id: cors-wildcard-misconfiguration
+name: CORS Wildcard Misconfiguration
+severity: HIGH
+owasp: A05
+tags: [cors, misconfig, headers]
+description: Server mengizinkan semua origin (*) dengan Access-Control-Allow-Origin header.
+
+request:
+  method: GET
+  path: /api/
+  headers:
+    Origin: https://evil.attacker.com
+
+matchers:
+  - type: word
+    words:
+      - "Access-Control-Allow-Origin: *"
+      - "Access-Control-Allow-Origin: https://evil.attacker.com"
+    condition: or

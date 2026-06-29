@@ -1,0 +1,19 @@
+﻿id: wp-debug-mode
+name: WordPress Debug Mode Enabled
+severity: HIGH
+owasp: A05
+tags: [wordpress, debug, exposure]
+description: WordPress berjalan dalam mode debug, mengekspos path file sistem dan error.
+
+request:
+  method: GET
+  path: /
+
+matchers:
+  - type: word
+    words:
+      - "WP_DEBUG"
+      - "Fatal error:"
+      - "PHP Warning:"
+      - "wp-includes"
+    condition: or

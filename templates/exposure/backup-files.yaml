@@ -1,0 +1,20 @@
+﻿id: backup-files-exposed
+name: Backup Files Publicly Accessible
+severity: HIGH
+owasp: A05
+tags: [backup, exposure, sensitive]
+description: File backup (zip, sql, tar.gz) dapat diunduh secara publik.
+
+request:
+  method: GET
+  path: /backup.zip
+
+matchers:
+  - type: word
+    words:
+      - "PK"
+      - "application/zip"
+      - "Content-Disposition: attachment"
+    condition: or
+  - type: status
+    status: [200]
